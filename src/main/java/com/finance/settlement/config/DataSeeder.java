@@ -33,19 +33,24 @@ public class DataSeeder implements CommandLineRunner {
     private static final int SEED_DAYS = 7;
 
     @Override
-    public void run(String... args) throws Exception {
-        if (accountRepository.count() > 0) {
-            log.info("데이터가 이미 존재합니다. Seeding 건너뜀.");
-            return;
+    public void run(String... args) {
+        try {
+            if (accountRepository.count() > 0) {
+                log.info("데이터가 이미 존재합니다. Seeding 건너뜀.");
+                return;
+            }
+
+            log.info("테스트 데이터 생성 시작: 계좌 {}개, 일 {}건 x {}일", ACCOUNT_COUNT, TRANSACTIONS_PER_DAY, SEED_DAYS);
+            long start = System.currentTimeMillis();
+
+            List<Account> accounts = seedAccounts();
+            seedTransactions(accounts);
+
+            log.info("테스트 데이터 생성 완료: {}ms", System.currentTimeMillis() - start);
+        } finally {
+            // seed 모드는 데이터 생성만 하고 즉시 종료한다 (web server 미기동 모드와 동일 효과)
+            System.exit(0);
         }
-
-        log.info("테스트 데이터 생성 시작: 계좌 {}개, 일 {}건 x {}일", ACCOUNT_COUNT, TRANSACTIONS_PER_DAY, SEED_DAYS);
-        long start = System.currentTimeMillis();
-
-        List<Account> accounts = seedAccounts();
-        seedTransactions(accounts);
-
-        log.info("테스트 데이터 생성 완료: {}ms", System.currentTimeMillis() - start);
     }
 
     @Transactional

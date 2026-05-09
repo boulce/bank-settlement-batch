@@ -11,6 +11,8 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
 
     Optional<Account> findByAccountNumber(String accountNumber);
 
+    boolean existsByAccountNumber(String accountNumber);
+
     @Query("SELECT a FROM Account a WHERE a.accountNumber IN :accountNumbers")
     List<Account> findAllByAccountNumbers(List<String> accountNumbers);
 }

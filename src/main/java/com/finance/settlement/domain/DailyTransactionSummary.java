@@ -35,12 +35,6 @@ public class DailyTransactionSummary {
     @Column(name = "net_amount", nullable = false, precision = 20, scale = 2)
     private BigDecimal netAmount;
 
-    @Column(name = "opening_balance", nullable = false, precision = 20, scale = 2)
-    private BigDecimal openingBalance;
-
-    @Column(name = "closing_balance", nullable = false, precision = 20, scale = 2)
-    private BigDecimal closingBalance;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private SummaryStatus status;
@@ -54,7 +48,6 @@ public class DailyTransactionSummary {
     }
 
     public enum SummaryStatus {
-        IN_PROGRESS,
         COMPLETED,
         VERIFIED
     }
@@ -63,7 +56,6 @@ public class DailyTransactionSummary {
     public DailyTransactionSummary(String accountNumber, LocalDate settlementDate,
                                    BigDecimal totalDeposit, BigDecimal totalWithdrawal,
                                    Integer transactionCount, BigDecimal netAmount,
-                                   BigDecimal openingBalance, BigDecimal closingBalance,
                                    SummaryStatus status) {
         this.accountNumber = accountNumber;
         this.settlementDate = settlementDate;
@@ -71,8 +63,6 @@ public class DailyTransactionSummary {
         this.totalWithdrawal = totalWithdrawal;
         this.transactionCount = transactionCount;
         this.netAmount = netAmount;
-        this.openingBalance = openingBalance;
-        this.closingBalance = closingBalance;
         this.status = status;
     }
 }

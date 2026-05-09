@@ -34,9 +34,7 @@ CREATE TABLE daily_transaction_summaries (
     total_withdrawal    DECIMAL(20, 2)  NOT NULL DEFAULT 0.00,
     transaction_count   INT             NOT NULL DEFAULT 0,
     net_amount          DECIMAL(20, 2)  NOT NULL DEFAULT 0.00,
-    opening_balance     DECIMAL(20, 2)  NOT NULL DEFAULT 0.00,
-    closing_balance     DECIMAL(20, 2)  NOT NULL DEFAULT 0.00,
-    status              VARCHAR(20)     NOT NULL DEFAULT 'IN_PROGRESS',
+    status              VARCHAR(20)     NOT NULL DEFAULT 'COMPLETED',
     created_at          DATETIME        NOT NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uk_account_date (account_number, settlement_date)

@@ -19,6 +19,6 @@ public class TransactionAggregationItemWriter implements ItemWriter<DailyTransac
     @Override
     public void write(@NonNull Chunk<? extends DailyTransactionSummary> chunk) {
         summaryRepository.saveAll(chunk.getItems());
-        log.debug("집계 결과 {}건 저장", chunk.size());
+        log.debug("Saved {} summaries", chunk.size());
     }
 }
