@@ -1,6 +1,6 @@
-# Claude Code 하네스 활용
+## 4. Claude Code 하네스 활용
 
-본 문서는 이 프로젝트가 어떻게 Claude Code의 하네스 엔지니어링 기능들을 코딩 워크플로우에 녹여 썼는지 정리한다. 단순 자동화를 넘어 **생성자(Generator) — 평가자(Evaluator) 분리** 패턴을 적용한 것이 핵심.
+[01-domain](01-domain.md) ~ [03-batch-design](03-batch-design.md)이 *무엇을 만들었는가* 라면, 본 문서는 *어떻게 만들었는가* 다. 단순 자동화를 넘어 **생성자(Generator) — 평가자(Evaluator) 분리** 패턴을 적용한 것이 핵심이다.
 
 ## 적용한 두 축
 
@@ -100,3 +100,7 @@
 
 - 블로그 글: *Harness design for long-running application development* (Anthropic, 2026-03-24)
 - Claude Code Hooks 공식 문서: settings.json `hooks` 섹션
+
+---
+
+각 sprint별로 어떤 contract가 있었고, evaluator가 무엇을 어떻게 잡아냈는지의 *영수증* 은 [docs/sprints/](sprints/)에 sprint마다 두 파일(`sprint-XX-NAME.md` + `sprint-XX-evaluation.md`)로 보관돼 있다.

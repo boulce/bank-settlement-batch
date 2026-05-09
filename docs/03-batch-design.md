@@ -1,6 +1,6 @@
-# Spring Batch 설계 결정
+## 3. Spring Batch 설계 결정
 
-본 문서는 "왜 Spring Batch를 골랐는지" 그리고 "Spring Batch의 어떤 기능을 어떤 이유로 어떻게 썼는지"를 정리한다.
+[02-architecture.md](02-architecture.md)에서 정리한 컴포넌트들을 묶고 있는 코어가 Spring Batch다. 본 문서는 "왜 Spring Batch였는지"와 "그 안의 어떤 기능을 어떤 이유로 어떻게 썼는지"를 정리한다.
 
 ## 왜 Spring Batch (vs. Airflow / cron + 일반 Spring 코드)
 
@@ -104,3 +104,7 @@ new JobBuilder("...")
 | SQL-level GROUP BY | 단순한 processor, 정확성 ↑ | DB 부하가 reader에 집중. 매우 큰 테이블이면 paging이 느려질 수 있음 |
 | RunIdIncrementer | 동일 파라미터 재실행 가능 | JobInstance가 매번 늘어나 메타데이터 정리 정책 필요 |
 | `validate` ddl-auto | prod 안전성 | 마이그레이션 도구 필수 (현재는 V1 단일 스크립트, 추후 Flyway 도입 권장) |
+
+---
+
+여기까지가 *무엇을 만들었는가* 의 이야기다. *어떻게 만들어졌는가* — 즉 이 코드를 빌드하면서 활용한 개발 방법론은 다음 문서에서 다룬다 → [04-harness.md](04-harness.md).

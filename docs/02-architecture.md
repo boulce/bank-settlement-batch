@@ -1,6 +1,8 @@
-# 아키텍처
+## 2. 아키텍처
 
-## 컴포넌트 다이어그램
+[01-domain.md](01-domain.md)에서 본 4단계 흐름(거래 발생 → 일일 집계 → 분개 → 월별 마감)을 코드와 테이블로 옮긴 결과를 정리한다.
+
+### 컴포넌트 다이어그램
 
 ```
                   ┌──────────────────────────────────────────────┐
@@ -145,3 +147,7 @@ Spring Boot의 기본 `JobLauncherApplicationRunner`는 `--spring.batch.job.name
 # 테스트
 ./gradlew test
 ```
+
+---
+
+이 컴포넌트들을 묶고 있는 Spring Batch 자체에 대한 결정과 트레이드오프는 다음 문서에서 다룬다 → [03-batch-design.md](03-batch-design.md).
