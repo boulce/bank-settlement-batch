@@ -20,6 +20,13 @@ docker compose up -d
 # 4) 결과 확인
 docker compose exec -T mysql mysql -uroot -psettlement1234 settlement_db \
     -e "SELECT * FROM daily_transaction_summaries LIMIT 5;"
+
+# 5) (선택) 분개 생성, 월별 마감
+./gradlew bootRun --args='--job=journalEntryGenerationJob --entryDate=2026-05-05'
+./gradlew bootRun --args='--job=monthlyClosingJob --yearMonth=2026-05'
+
+# 6) (선택) 스케줄러 모드로 부팅 — 매일/매월 cron 자동 트리거
+./gradlew bootRun --args='--spring.profiles.active=scheduled'
 ```
 
 ## 어디부터 읽어야 하나요?
@@ -47,9 +54,20 @@ docker compose exec -T mysql mysql -uroot -psettlement1234 settlement_db \
 ## 진행 상태
 
 - [x] **Sprint 01: DailyTransactionAggregationJob** — 일별 거래 집계 (PASS)
-- [ ] Sprint 02: JournalEntryGenerationJob — 분개 자동 생성
-- [ ] Sprint 03: MonthlyClosingJob — 월별 마감
-- [ ] Sprint 04: Scheduler — 정기 자동 트리거 + 실패 시나리오 테스트
+- [x] **Sprint 02: JournalEntryGenerationJob** — 분개 자동 생성 (PASS)
+- [x] **Sprint 03: MonthlyClosingJob** — 월별 마감 (PASS)
+- [x] **Sprint 04: Scheduler** — 정기 자동 트리거 + 재시작 개념 정리 (PASS)
+
+### 누적 데이터 흐름 (검증 완료)
+
+```
+transactions (7,000건)
+   ├── Job 1 ──> daily_transaction_summaries (700건 = 100 계좌 × 7일)
+   │              └── Job 3 ──> monthly_account_summaries (100건)
+   │
+   └── Job 2 ──> journal_entries (14,000건 = 7,000 × debit/credit 2건)
+                  invariant: SUM(debit) = SUM(credit)
+```
 
 ## 디렉터리 구조 (요약)
 
