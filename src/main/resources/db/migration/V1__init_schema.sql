@@ -40,6 +40,20 @@ CREATE TABLE daily_transaction_summaries (
     UNIQUE KEY uk_account_date (account_number, settlement_date)
 );
 
+CREATE TABLE monthly_account_summaries (
+    id                  BIGINT          NOT NULL AUTO_INCREMENT,
+    account_number      VARCHAR(20)     NOT NULL,
+    year_month_key      VARCHAR(7)      NOT NULL,
+    total_deposit       DECIMAL(20, 2)  NOT NULL DEFAULT 0.00,
+    total_withdrawal    DECIMAL(20, 2)  NOT NULL DEFAULT 0.00,
+    transaction_count   INT             NOT NULL DEFAULT 0,
+    net_amount          DECIMAL(20, 2)  NOT NULL DEFAULT 0.00,
+    settlement_days     INT             NOT NULL DEFAULT 0,
+    created_at          DATETIME        NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_account_month (account_number, year_month_key)
+);
+
 CREATE TABLE journal_entries (
     id              BIGINT          NOT NULL AUTO_INCREMENT,
     transaction_id  VARCHAR(36)     NOT NULL,

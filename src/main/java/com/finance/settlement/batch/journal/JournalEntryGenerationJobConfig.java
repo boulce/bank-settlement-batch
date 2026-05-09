@@ -50,7 +50,7 @@ public class JournalEntryGenerationJobConfig {
                 .incrementer(new RunIdIncrementer())
                 .start(journalCleanupStep)
                 .next(journalGenerationStep)
-                .listener(jobListener())
+                .listener(journalJobListener())
                 .build();
     }
 
@@ -89,7 +89,7 @@ public class JournalEntryGenerationJobConfig {
     }
 
     @Bean
-    public JobExecutionListener jobListener() {
+    public JobExecutionListener journalJobListener() {
         return new JobExecutionListener() {
             @Override
             public void beforeJob(JobExecution jobExecution) {
