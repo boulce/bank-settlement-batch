@@ -1,0 +1,40 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=$(jq -r '.tool_input.file_path // \"\"'); echo \"$FILE\" | grep -q '\\.java$' || exit 0; cd /Users/songhabin/apps/bank-settlement-batch && ./gradlew compileJava --quiet 2>&1 | tail -10",
+            "timeout": 60,
+            "statusMessage": "Java 컴파일 확인 중..."
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=$(jq -r '.tool_input.file_path // \"\"'); echo \"$FILE\" | grep -qE '(Test[^/]*\\.java|[^/]*Tests\\.java)$' || exit 0; cd /Users/songhabin/apps/bank-settlement-batch && ./gradlew test --quiet 2>&1 | tail -15",
+            "timeout": 120,
+            "statusMessage": "테스트 실행 중..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /Users/songhabin/apps/bank-settlement-batch && ./gradlew build -x test --quiet 2>&1 | tail -10",
+            "timeout": 120,
+            "statusMessage": "빌드 최종 확인 중..."
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: settlement-mysql
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: settlement1234
+      MYSQL_DATABASE: settlement_db
+      TZ: Asia/Seoul
+    volumes:
+      - settlement-mysql-data:/var/lib/mysql
+      - ./src/main/resources/db/migration:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-psettlement1234"]
+      interval: 10s
+      retries: 5
+
+volumes:
+  settlement-mysql-data:
