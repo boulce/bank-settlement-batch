@@ -119,7 +119,7 @@ Airflow의 분산성은 오버킬이고, cron의 단순함은 무결성을 직�
 
 **왜 IllegalStateException만**: 너무 광범위한 예외(`Exception.class`)를 skip하면 NPE 같은 코드 버그도 조용히 넘어가버림. 본 프로젝트는 *예상 가능한 데이터 결함*만 명시적으로 IllegalStateException으로 던지고, 그것만 skip 대상으로 등록.
 
-**잃은 것**: skip된 건은 어딘가에 따로 처리해야 함. `BATCH_STEP_EXECUTION.skip_count`로 추적은 되지만, 운영에서는 skip 로그 → 재처리 큐 같은 패턴이 별도 필요. 본 프로젝트는 skip 카운트만 기록.
+**잃은 것**: skip된 건은 어딘가에 따로 처리해야 함. `BATCH_STEP_EXECUTION`이 단계별 skip 3종(`read_skip_count` / `process_skip_count` / `write_skip_count`)을 분리해 기록하지만, 운영에서는 skip 로그 → 재처리 큐 같은 패턴이 별도 필요. 본 프로젝트는 카운트만 남긴다.
 
 ### 2.4 RunIdIncrementer + cleanupStep (멱등성 패턴)
 
@@ -201,7 +201,7 @@ Spring Batch는 부팅 시 자동으로 메타데이터 테이블을 만들고, 
 | `BATCH_JOB_INSTANCE` | "Job 이름 + identifying JobParameters" 조합의 인스턴스 (식별자 역할) |
 | `BATCH_JOB_EXECUTION` | 한 번의 실행 시도 (status, start/end time, exit code) |
 | `BATCH_JOB_EXECUTION_PARAMS` | 그 실행에 들어간 JobParameters의 실제 값 |
-| `BATCH_STEP_EXECUTION` | 각 Step의 실행 통계 (read_count, write_count, skip_count, commit_count) |
+| `BATCH_STEP_EXECUTION` | 각 Step의 실행 통계 (read_count, write_count, commit_count, 그리고 단계별 skip 3종: read_skip_count / process_skip_count / write_skip_count) |
 | `BATCH_STEP_EXECUTION_CONTEXT` | Step 진행 위치 (restart용 — 우리는 안 씀) |
 
 ### 4.2 우리 시드에서 본 실제 값
@@ -236,7 +236,7 @@ cleanupStep            COMPLETED  0           0            1
 |---|---|
 | **실패 알림** | `WHERE status='FAILED'` 모니터링 → Slack/PagerDuty webhook |
 | **처리량 추적** | `read_count` 시계열 → "거래량이 어제 대비 30% 줄었네" 같은 신호 |
-| **품질 추적** | `skip_count > 0` → 데이터 품질 이슈 → 별도 큐로 보내 재처리 |
+| **품질 추적** | `(read_skip_count + process_skip_count + write_skip_count) > 0` → 데이터 품질 이슈 → 별도 큐로 보내 재처리 |
 | **재실행 결정** | 실패한 JobInstance 발견 → 코드 fix → 같은 settlementDate로 재실행 (cleanupStep이 부분 결과 정리) |
 | **메타데이터 정리** | 30일 이상 된 BATCH_JOB_EXECUTION row 삭제하는 housekeeping 잡 (실제로는 archival 후 삭제) |
 
