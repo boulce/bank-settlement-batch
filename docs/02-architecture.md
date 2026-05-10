@@ -184,7 +184,7 @@ com.finance.settlement
 │       └── MonthlyAggregateRow
 │
 ├── config/
-│   └── DataSeeder.java                        ── @Profile("seed") — 더미 데이터 100계좌 × 7000거래 생성
+│   └── DataSeeder.java                        ── @Profile("seed") — 더미 데이터 5,000계좌 × 35,000거래 생성
 │
 ├── domain/                                    ── JPA 엔티티 (= 비즈 테이블 매핑 객체)
 │   ├── Account.java
@@ -226,23 +226,24 @@ Job 1을 예로 들어 위 추상 모델이 실제로 어떻게 실행되는지:
         │    GROUP BY t.accountNumber
         │
         ▼
-   AggregateRow 100개 (계좌별 1행)
+   AggregateRow ≈3,160개 (그 날 거래가 있었던 계좌별 1행 — 시드는 5000 계좌 중 랜덤 분배)
         │
         │  Processor: 1:1 변환 (stateless)
         │    AggregateRow → DailyTransactionSummary 엔티티
         │
         ▼
-   DailyTransactionSummary 엔티티 100개
+   DailyTransactionSummary 엔티티 ≈3,160개
         │
         │  Writer: chunk 단위로 saveAll → INSERT
-        │  (chunk size=1000인데 데이터가 100개뿐이라
-        │   Reader가 다 떨어졌을 때 남은 100건이 한 번에 flush됨)
+        │  (chunk size=1000이므로 3160 → 1000+1000+1000+160으로 4번에 나눠 commit)
         │
         ▼
-   daily_transaction_summaries 테이블에 100행 INSERT
+   daily_transaction_summaries 테이블에 ≈3,160행 INSERT
 ```
 
-> **chunk size 보충**: chunk size는 "최대 N건까지 메모리에 모았다가 한 번에 Writer로 보내는 버퍼 크기"다. 두 조건 중 먼저 만족되는 쪽에서 flush 트리거: ① 버퍼가 N건 가득 참, 또는 ② Reader가 더 줄 게 없음을 알림(null 리턴). 마지막 chunk는 거의 항상 N개 미만. 5000건짜리 데이터라면 1000+1000+1000+1000+1000 다섯 번에 나눠 commit되고, 100건짜리는 100건 한 번에 commit된다.
+> **chunk size 보충**: chunk size는 "최대 N건까지 메모리에 모았다가 한 번에 Writer로 보내는 버퍼 크기"다. 두 조건 중 먼저 만족되는 쪽에서 flush 트리거: ① 버퍼가 N건 가득 참, 또는 ② Reader가 더 줄 게 없음을 알림(null 리턴). 마지막 chunk는 거의 항상 N개 미만.
+>
+> 본 프로젝트는 시드를 5000계좌 × 5000거래/일 규모로 설계해서 chunk가 실제로 여러 번 fired되는 것을 metadata에서 직접 확인 가능: `BATCH_STEP_EXECUTION.commit_count` 가 Job 1 aggregationStep은 4, Job 2 journalGenerationStep과 Job 3 closingStep은 6 (= 5000/1000 chunk + 마지막 빈 chunk 1번).
 
 핵심: **집계는 Reader 단계에서 SQL이 처리**한다. Processor는 변환만, Writer는 저장만. 각자 책임이 1줄로 떨어진다.
 

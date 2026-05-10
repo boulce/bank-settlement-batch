@@ -29,8 +29,8 @@ public class DataSeeder implements CommandLineRunner {
     private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
 
-    private static final int ACCOUNT_COUNT = 100;
-    private static final int TRANSACTIONS_PER_DAY = 1000;
+    private static final int ACCOUNT_COUNT = 5_000;
+    private static final int TRANSACTIONS_PER_DAY = 5_000;
     private static final int SEED_DAYS = 7;
 
     /**

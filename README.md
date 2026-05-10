@@ -23,7 +23,7 @@ Spring Batch 5로 만든 일일 정산 배치 시스템.
 # 1) MySQL 컨테이너 기동 (포트 3307)
 docker compose up -d
 
-# 2) 시드 데이터 생성 (계좌 100, 거래 7,000)
+# 2) 시드 데이터 생성 (계좌 5,000, 거래 35,000 — chunk가 실제로 여러 번 fired되도록 충분히 큰 규모)
 ./gradlew bootRun --args='--spring.profiles.active=seed'
 
 # 3) 하루치 정산 파이프라인 실행
@@ -48,15 +48,15 @@ docker compose exec -T mysql mysql -uroot -psettlement1234 settlement_db \
 ## 데이터 흐름 (검증 완료)
 
 ```
-transactions (7,000건)
-   ├── Job 1 ──> daily_transaction_summaries (700건 = 100 계좌 × 7일)
-   │              └── Job 3 ──> monthly_account_summaries (100건)
+transactions (35,000건 = 5,000 계좌, 일 5,000 거래 × 7일)
+   ├── Job 1 ──> daily_transaction_summaries (≈22,000건 = 일별 distinct 계좌 × 7일)
+   │              └── Job 3 ──> monthly_account_summaries (5,000건 = 계좌당 1행)
    │
-   └── Job 2 ──> journal_entries (14,000건 = 7,000 × debit/credit 2건)
+   └── Job 2 ──> journal_entries (10,000건/일 = 5,000 tx × debit/credit 2건)
                   invariant: SUM(debit) = SUM(credit) — 복식부기 보장
 ```
 
-각 Job의 acceptance criteria와 실제 검증 결과는 [docs/sprints](docs/sprints/) 폴더에서 sprint별로 확인할 수 있다.
+이 규모에서 Spring Batch chunk(1000)가 모든 Job에서 실제로 여러 번 fired됨 (BATCH_STEP_EXECUTION의 commit_count 4~6). 각 Job의 acceptance criteria와 실제 검증 결과는 [docs/sprints](docs/sprints/) 폴더에서 sprint별로 확인할 수 있다.
 
 ## Sprint 진행 현황
 
