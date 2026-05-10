@@ -234,11 +234,15 @@ Job 1을 예로 들어 위 추상 모델이 실제로 어떻게 실행되는지:
         ▼
    DailyTransactionSummary 엔티티 100개
         │
-        │  Writer: chunk(1000)에 모이면 saveAll로 INSERT
+        │  Writer: chunk 단위로 saveAll → INSERT
+        │  (chunk size=1000인데 데이터가 100개뿐이라
+        │   Reader가 다 떨어졌을 때 남은 100건이 한 번에 flush됨)
         │
         ▼
    daily_transaction_summaries 테이블에 100행 INSERT
 ```
+
+> **chunk size 보충**: chunk size는 "최대 N건까지 메모리에 모았다가 한 번에 Writer로 보내는 버퍼 크기"다. 두 조건 중 먼저 만족되는 쪽에서 flush 트리거: ① 버퍼가 N건 가득 참, 또는 ② Reader가 더 줄 게 없음을 알림(null 리턴). 마지막 chunk는 거의 항상 N개 미만. 5000건짜리 데이터라면 1000+1000+1000+1000+1000 다섯 번에 나눠 commit되고, 100건짜리는 100건 한 번에 commit된다.
 
 핵심: **집계는 Reader 단계에서 SQL이 처리**한다. Processor는 변환만, Writer는 저장만. 각자 책임이 1줄로 떨어진다.
 
