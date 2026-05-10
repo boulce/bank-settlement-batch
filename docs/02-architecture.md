@@ -253,14 +253,81 @@ Job 1을 예로 들어 위 추상 모델이 실제로 어떻게 실행되는지:
 
 ### 6.1 Reader에서 SQL-level GROUP BY로 집계
 
-**처음 떠올리는 방식**: Reader가 transaction을 한 건씩 꺼내고, Processor가 `Map<account, summary>`에 누적하다가 마지막에 모두 emit.
+이 결정의 핵심은 **"누적 책임을 어디에 두느냐"**다. Processor에 두면 Spring Batch의 chunk 메커니즘과 충돌해 UNIQUE 위반이 난다. 그래서 DB(Reader 쿼리)에 둔다.
 
-**이게 왜 망가지나**:
-- Spring Batch는 chunk(예: 1000) 단위로 트랜잭션 commit. processor가 chunk 안에서 같은 계좌의 거래 N건을 처리하면 같은 logical 엔티티를 N번 emit하게 된다.
-- Writer는 N개의 transient(=DB에 아직 없는) 엔티티에 대해 INSERT를 N번 시도 → `daily_transaction_summaries`의 UNIQUE(account_number, settlement_date) 제약 위반.
-- 게다가 chunk 경계에서 한 계좌의 거래가 잘리면 부분 합계가 두 번 나오는 등 정확성도 깨진다.
+#### 비유로 잡고 가기 — ATM 영수증 → 합계 종이 → 장부
 
-**해결**: 집계를 **DB 쪽에서 GROUP BY로 끝낸 다음** Reader가 1행/계좌만 가져온다. Processor는 단순 1:1 매핑이라 chunk 경계 문제가 원천 차단.
+| 역할 | 하는 일 |
+|---|---|
+| Reader | 영수증을 한 장씩 꺼내 주는 사람 |
+| Processor | 받은 영수증을 보고 무엇을 적어야 할지 결정하는 사람 |
+| Writer | Processor한테 받은 종이를 chunk(1000)장 모이면 한 번에 장부에 풀로 붙이는 사람 |
+
+장부의 무결성 규칙: **한 계좌·한 날짜에 1행씩** (`UNIQUE(account_number, settlement_date)`).
+
+#### "처음 떠올리는 방식" — 그리고 왜 깨지는가
+
+직관: "Processor가 받을 때마다 합계 종이를 만들고/누적해서 Writer에 건네면 되겠지." 코드로 보면:
+
+```java
+class Processor implements ItemProcessor<Transaction, DailyTransactionSummary> {
+    private Map<String, DailyTransactionSummary> cache = new HashMap<>();
+
+    public DailyTransactionSummary process(Transaction tx) {
+        DailyTransactionSummary s = cache.computeIfAbsent(tx.getAccountNumber(), ...);
+        s.add(tx);
+        return s;   // ← 매 호출마다 뭔가는 반환해야 함 (Spring Batch 규칙)
+    }
+}
+```
+
+**깨짐 1 — 같은 chunk에 같은 계좌가 여러 번 나오면**
+
+영수증 1000장(=chunk 1) 안에 1번 계좌 거래가 5건 있다고 하자. Processor는 매 호출마다 종이 1장을 반환해야 하니, **같은 1번 종이를 5번** 반환하게 된다.
+
+chunk 끝나서 Writer가 받은 묶음:
+```
+[1번 종이, 5번 종이, 1번 종이, 1번 종이, 7번 종이, 1번 종이, 1번 종이, ...]
+```
+
+Writer가 `saveAll(묶음)` 호출 → 1번 종이를 장부에 5번 INSERT 시도 → **`UNIQUE(account_number, settlement_date)` 위반** 💥.
+
+**깨짐 2 — 같은 계좌 거래가 chunk 경계를 넘어가면**
+
+```
+chunk 1 (영수증 1~1000):
+   1번 계좌 거래 5건 누적 → 합계 종이에 5건분 적힘
+   → Writer flush → 1번 행 INSERT → 트랜잭션 COMMIT
+
+chunk 2 (영수증 1001~2000):
+   1번 계좌 거래 또 3건 누적 → 합계 종이 또 만들어짐
+   → Writer flush → 1번 행 또 INSERT 시도 → UNIQUE 위반 💥
+```
+
+근본 원인은 같다: **Processor에 누적 책임을 주면 그 책임이 chunk 단위 트랜잭션과 안 맞는다.**
+
+#### 해결: 누적을 DB로 옮기기
+
+Reader가 transaction을 한 건씩 꺼내는 게 아니라, **GROUP BY로 미리 계좌별 합계가 끝난 결과**를 한 행씩 꺼낸다.
+
+```sql
+SELECT account_number,
+       SUM(CASE WHEN type IN ('DEPOSIT', 'TRANSFER_IN')         THEN amount ELSE 0 END),
+       SUM(CASE WHEN type IN ('WITHDRAWAL','TRANSFER_OUT','FEE') THEN amount ELSE 0 END),
+       COUNT(*)
+FROM transactions
+WHERE transaction_date = :date AND status = 'COMPLETED'
+GROUP BY account_number
+```
+
+(실제 코드는 JPQL constructor expression으로 같은 모양의 쿼리, `TransactionAggregationItemReader.java` 참고.)
+
+이러면 Reader가 꺼내는 건 **"계좌당 1행"이 보장된 데이터**다. 그러면:
+- Processor는 stateless 1:1 매핑만 (state 안 들고, cache 없고, 같은 객체를 두 번 반환할 일 없음).
+- 같은 chunk에 같은 계좌가 두 번 나올 수 없음 → 깨짐 1 차단.
+- 같은 계좌가 chunk 경계를 넘어갈 수 없음 → 깨짐 2 차단.
+
+> **한 문장 요약**: Processor에 누적을 시키면 chunk 경계와 충돌해 UNIQUE 위반이 난다. 그래서 누적을 DB로 옮겨, Reader가 이미 합쳐진 1행/계좌를 꺼내게 한다.
 
 ### 6.2 cleanupStep + RunIdIncrementer로 멱등성 확보
 
