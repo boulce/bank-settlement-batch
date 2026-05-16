@@ -247,7 +247,7 @@ Job 1을 예로 들어 위 추상 모델이 실제로 어떻게 실행되는지:
 
 핵심: **집계는 Reader 단계에서 SQL이 처리**한다. Processor는 변환만, Writer는 저장만. 각자 책임이 1줄로 떨어진다.
 
-## 6. 핵심 설계 결정 5가지
+## 6. 핵심 설계 결정 6가지
 
 각 결정의 "왜 그게 문제인지"부터 풀어 쓰는 형식.
 
@@ -401,6 +401,81 @@ opening/closing balance 컬럼을 두면 무엇을 채워도 **잘못된 값**�
 **현재 방식**: `src/main/resources/db/migration/V1__init_schema.sql`이 docker-compose의 MySQL 컨테이너 초기 부팅 시(`docker-entrypoint-initdb.d`) 한 번 적용됨. 이후 변경은 docker volume drop + 재부팅 또는 직접 ALTER 필요.
 
 **한계**: V1 단일 스크립트만 사용. 진정한 마이그레이션 도구(Flyway/Liquibase)는 도입 안 함. 운영 단계로 가면 도입이 다음 자연 step.
+
+### 6.6 금액 필드는 BigDecimal 일관 사용
+
+#### 왜 필요한가
+
+회계 시스템은 *1원의 오차도 허용되지 않는다*. 복식부기 invariant — `SUM(debit) = SUM(credit)` — 가 정확히 맞아야 정합성이 유지된다.
+
+자바의 부동소수점 타입(double/float)은 IEEE 754 2진 부동소수점 표현을 쓴다. 10진수 소수 일부는 2진수로 정확히 표현할 수 없어 오차가 발생한다:
+
+```java
+double a = 0.1;
+double b = 0.2;
+System.out.println(a + b);            // 0.30000000000000004
+System.out.println(0.1 + 0.2 == 0.3); // false
+```
+
+1회 오차는 무시할 수준이지만 *누적되면* 회계 정합성을 깬다. 본 프로젝트는 거래 7,000건/일 × 분개 14,000건/일을 처리한다. 매 거래마다 작은 오차가 누적되면 월말 정합성 검증에서 차변·대변이 어긋난다.
+
+#### 선택: BigDecimal 일관 사용
+
+모든 금액 필드 — `Transaction.amount`, `DailyTransactionSummary.totalDeposit/Withdrawal/netAmount`, `JournalEntry.amount`, `MonthlyAccountSummary.*` — 는 `BigDecimal` 타입. DB 컬럼은 `DECIMAL(20, 2)`.
+
+BigDecimal은 10진수 임의 정밀도 표현이라 오차가 없다:
+
+```java
+BigDecimal a = new BigDecimal("0.1");
+BigDecimal b = new BigDecimal("0.2");
+System.out.println(a.add(b));  // 0.3 (정확)
+```
+
+#### 트레이드오프
+
+| 비용 | 평가 |
+|---|---|
+| 성능 | BigDecimal 산술이 double 대비 ~10x 느림. 단 배치에선 DB I/O가 병목이라 무시 가능 |
+| 메모리 | primitive double(8B) → 객체(수십 B). chunk size 1000 기준 무시 가능 |
+| 가독성 | `+ - * /` → `.add() .subtract() .multiply() .divide()` 메소드 호출 |
+
+배치 컨텍스트에서 비용은 *모두 무시 가능* 수준. 정확성 이득이 압도적.
+
+#### 코드 컨벤션 (실수 방지)
+
+BigDecimal은 잘못 쓰면 *정확성 이득을 잃는다*. 세 가지 주의:
+
+**1. 생성 시 String 사용**
+
+```java
+new BigDecimal(0.1)         // ❌ double 오차가 그대로 들어옴
+                            //    = 0.1000000000000000055511...
+new BigDecimal("0.1")       // ✅ 정확히 0.1
+BigDecimal.valueOf(0.1)     // ✅ (내부적으로 String 변환)
+```
+
+**2. 비교는 compareTo**
+
+```java
+new BigDecimal("1.0").equals(new BigDecimal("1.00"))     // false (scale 다름)
+new BigDecimal("1.0").compareTo(new BigDecimal("1.00"))  // 0 (값 같음)
+```
+
+값 비교는 항상 `compareTo() == 0`. `equals()`는 scale까지 동일해야 true.
+
+**3. 나눗셈은 RoundingMode 명시**
+
+```java
+new BigDecimal("10").divide(new BigDecimal("3"))
+// ArithmeticException: Non-terminating decimal expansion
+
+new BigDecimal("10").divide(new BigDecimal("3"), 2, RoundingMode.HALF_UP)
+// 3.33
+```
+
+무한 소수는 scale + RoundingMode 없이 못 나눈다.
+
+> **한 문장 요약**: 회계는 1원 오차도 허용 안 하는데 double/float은 2진 부동소수점 오차가 누적된다. BigDecimal은 정확한 10진수 표현이라 성능 비용을 감수하고 일관 사용. 단 생성 시 String, 비교는 compareTo, 나눗셈은 RoundingMode 명시 필요.
 
 ## 7. 환경별 프로필
 
